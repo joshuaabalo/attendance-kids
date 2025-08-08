@@ -127,7 +127,7 @@ def logout():
         del st.session_state.program
     if "display_name" in st.session_state:
         del st.session_state.display_name
-    st.experimental_rerun()
+    st.rerun()
 
 # If not logged in show login
 if "user" not in st.session_state:
@@ -245,7 +245,7 @@ elif menu == "Kids":
             else:
                 add_kid(kname.strip(), kage, kgender, kprogram, kimage)
                 st.success("Kid added")
-                st.experimental_rerun()
+                st.rerun()
 
     st.markdown("---")
     st.subheader("All kids")
@@ -274,7 +274,7 @@ elif menu == "Kids":
             with cols[3]:
                 if st.button(f"View|{r['id']}", key=f"view_{r['id']}"):
                     st.session_state.selected_kid = r['id']
-                    st.experimental_rerun()
+                    st.rerun()
         st.markdown("---")
         st.write("You can manage kids by selecting their profile from the list above. To remove or edit, open their profile.")
 
@@ -322,7 +322,7 @@ elif menu == "Attendance":
                     new_att = pd.concat([new_att, pd.DataFrame([row])], ignore_index=True)
                 save_att(new_att)
                 st.success("Attendance saved.")
-                st.experimental_rerun()
+                st.rerun()
 
 # --- Child Profile view ---
 elif menu == "Child Profile":
@@ -350,7 +350,7 @@ elif menu == "Child Profile":
                 if role in ("admin","leader"):
                     if st.button("Edit kid"):
                         st.session_state.edit_kid = kid["id"]
-                        st.experimental_rerun()
+                        st.rerun()
             with cols[2]:
                 kid_att = att_df[att_df["kid_id"]==kid["id"]].sort_values("date", ascending=False)
                 present_days = kid_att[kid_att["present"]==1].shape[0]
@@ -410,6 +410,6 @@ if st.session_state.get("edit_kid", None):
                 save_kids(kids)
                 st.success("Kid updated.")
                 del st.session_state["edit_kid"]
-                st.experimental_rerun()
+                st.rerun()
     else:
         st.error("Kid not found.")
