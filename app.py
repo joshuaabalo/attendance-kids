@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import os
@@ -8,7 +9,7 @@ from pathlib import Path
 
 # ---------------- Config ----------------
 APP_TITLE = "Fafali Attendance Manager"
-LOGO_FILE = "Fafali_icont.png"
+LOGO_FILE = "Fafali_icont.png"  # place this file in the same folder as app.py
 IMAGES_DIR = "images"
 
 USERS_FILE = "users.csv"
@@ -16,7 +17,7 @@ PROGRAMS_FILE = "programs.csv"
 KIDS_FILE = "kids.csv"
 ATT_FILE = "attendance.csv"
 
-# Colors
+# Colors (based on your logo)
 PRIMARY_GREEN = "#0b7a3a"
 ACCENT_YELLOW = "#ffd83a"
 BG = "#0b0f14"
@@ -31,20 +32,15 @@ def ensure_csv(path, columns, create_sample=False):
         df = pd.DataFrame(columns=columns)
         df.to_csv(path, index=False)
         if create_sample and path == USERS_FILE:
+            # create default admin user
             admin_hash = hashlib.sha256("admin".encode()).hexdigest()
-            df = pd.DataFrame([{
-                "username": "admin",
-                "password": admin_hash,
-                "role": "admin",
-                "program": "",
-                "full_name": "Administrator"
-            }])
+            df = pd.DataFrame([{"username":"admin","password":admin_hash,"role":"admin","program":"","full_name":"Administrator"}])
             df.to_csv(USERS_FILE, index=False)
 
-ensure_csv(USERS_FILE, ["username", "password", "role", "program", "full_name"], create_sample=True)
+ensure_csv(USERS_FILE, ["username","password","role","program","full_name"], create_sample=True)
 ensure_csv(PROGRAMS_FILE, ["program"])
-ensure_csv(KIDS_FILE, ["id", "name", "age", "gender", "program", "image_path"])
-ensure_csv(ATT_FILE, ["date", "kid_id", "present", "note", "program", "marked_by", "timestamp"])
+ensure_csv(KIDS_FILE, ["id","name","age","gender","program","image_path"])
+ensure_csv(ATT_FILE, ["date","kid_id","present","note","program","marked_by","timestamp"])
 
 # ---------------- Helpers ----------------
 def hash_pwd(password: str) -> str:
@@ -78,16 +74,15 @@ def add_user(username, password, role, program="", full_name=""):
     users = load_users()
     if username in users["username"].values:
         return False, "Username exists"
-    row = {
-        "username": username,
-        "password": hash_pwd(password),
-        "role": role,
-        "program": program,
-        "full_name": full_name
-    }
+    row = {"username": username, "password": hash_pwd(password), "role": role, "program": program, "full_name": full_name}
     users = pd.concat([users, pd.DataFrame([row])], ignore_index=True)
     save_users(users)
     return True, "User created"
+
+def remove_user(username):
+    users = load_users()
+    users = users[users["username"] != username]
+    save_users(users)
 
 def add_program(prog):
     progs = load_programs()
@@ -111,14 +106,7 @@ def add_kid(name, age, gender, program, image_file):
     image_path = ""
     if image_file is not None:
         image_path = save_kid_image(image_file, name, kid_id)
-    row = {
-        "id": kid_id,
-        "name": name,
-        "age": int(age),
-        "gender": gender,
-        "program": program,
-        "image_path": image_path
-    }
+    row = {"id": kid_id, "name": name, "age": int(age), "gender": gender, "program": program, "image_path": image_path}
     kids = pd.concat([kids, pd.DataFrame([row])], ignore_index=True)
     save_kids(kids)
     return kid_id
@@ -127,6 +115,7 @@ def remove_kid(kid_id):
     kids = load_kids()
     kids = kids[kids["id"] != kid_id]
     save_kids(kids)
+    # remove attendance entries
     att = load_att()
     att = att[att["kid_id"] != kid_id]
     save_att(att)
@@ -136,6 +125,7 @@ def stats_for_kid(kid_id):
     kids = load_kids()
     rec = att[att["kid_id"]==kid_id]
     present = rec[rec["present"]==1]["date"].nunique()
+    # total program days
     prog = kids[kids["id"]==kid_id]["program"].values
     if len(prog)==0:
         total = att["date"].nunique()
@@ -147,28 +137,35 @@ def stats_for_kid(kid_id):
 
 # ---------------- UI Styling ----------------
 st.set_page_config(APP_TITLE, layout="wide", page_icon=LOGO_FILE if os.path.exists(LOGO_FILE) else None)
-st.markdown(f"""
+_st_style = f"""
 <style>
 :root{{--bg:{BG}; --card:{CARD}; --muted:{MUTED}; --accent:{PRIMARY_GREEN}; --highlight:{ACCENT_YELLOW}; --text:{TEXT};}}
 body {{ background: var(--bg); color: var(--text); }}
+.reportview-container .main .block-container{{padding-top:1rem; padding-left:1rem; padding-right:1rem;}}
 .stButton>button {{ background-color: var(--accent); color: #fff; border: none; padding: 8px 12px; border-radius: 8px; }}
 .stButton>button:hover {{ filter: brightness(1.05); }}
+.css-1e5imcs .st-bf {{ background-color: var(--card); }}
 .card {{ background: var(--card); padding: 16px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }}
 .small-muted {{ color: var(--muted); font-size: 13px; }}
+.kpi {{ font-size:18px; font-weight:700; color:var(--text); }}
+.logo {{ display:flex; align-items:center; gap:10px; }}
 </style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(_st_style, unsafe_allow_html=True)
 
-# ---------------- Login ----------------
+# ---------------- Login / Authentication ----------------
 def login_panel():
     st.sidebar.markdown("---")
     if os.path.exists(LOGO_FILE):
         st.sidebar.image(LOGO_FILE, width=140)
     st.sidebar.title("Login")
-    username = st.sidebar.text_input("Username")
-    password = st.sidebar.text_input("Password", type="password")
+
+    username = st.sidebar.text_input("Username", key="login_username")
+    password = st.sidebar.text_input("Password", type="password", key="login_password")
+
     if st.sidebar.button("Login"):
         users = load_users()
-        user_row = users[users["username"]==username]
+        user_row = users[users["username"] == username]
         if user_row.empty:
             st.sidebar.error("No such user.")
             return False
@@ -176,7 +173,11 @@ def login_panel():
         if hash_pwd(password) == stored["password"]:
             st.session_state.logged_in = True
             st.session_state.username = username
-            st.session_state.role = stored["role"]
+            # Treat "leader" as a normal non-admin user
+            role_value = stored["role"]
+            if role_value == "leader":
+                role_value = "user"
+            st.session_state.role = role_value
             st.session_state.program = stored.get("program", "")
             st.session_state.full_name = stored.get("full_name", username)
             st.sidebar.success(f"Signed in as {st.session_state.full_name} ({st.session_state.role})")
@@ -186,21 +187,32 @@ def login_panel():
             return False
     return False
 
-# Session state
+
+# Ensure session state
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
+# If not logged-in show centered login UI
 if not st.session_state.logged_in:
-    st.info("Please log in from the sidebar. Default admin: **admin / admin**")
+    # show logo + title
+    cols = st.columns([1,3,1])
+    with cols[1]:
+        if os.path.exists(LOGO_FILE):
+            st.image(LOGO_FILE, width=140)
+        st.markdown(f"<h1 style='color:{TEXT}; margin:8px 0'>{APP_TITLE}</h1>", unsafe_allow_html=True)
+        st.markdown(f"<p class='small-muted'>Manage programs, leaders, kids and attendance — powered by Fafali</p>", unsafe_allow_html=True)
+        st.markdown("---")
+        st.info("Please login from the sidebar. Default admin: **admin / admin**")
     login_panel()
     st.stop()
 
+# After login
 username = st.session_state.username
 role = st.session_state.role
 user_program = st.session_state.program
 full_name = st.session_state.full_name
 
-# Sidebar
+# Sidebar menu & logout
 st.sidebar.markdown("---")
 st.sidebar.write(f"**{full_name}**")
 st.sidebar.write(f"Role: `{role}`")
@@ -212,22 +224,24 @@ if st.sidebar.button("Log out"):
         if k in st.session_state: del st.session_state[k]
     st.experimental_rerun()
 
+# Admin extra tools in sidebar
 admin_tool = None
 if role == "admin":
     admin_tool = st.sidebar.selectbox("Admin Tools", ["None","Manage Programs","Manage Users","System Reset"])
-menu = st.sidebar.radio("Main", ["Dashboard","Kids","Attendance","Profiles","Export"])
+
+menu = st.sidebar.radio("Main", ["Dashboard","Kids","Attendance","Profiles","Export"], index=0)
 
 # ---------------- Dashboard ----------------
 if menu == "Dashboard":
-    st.header(APP_TITLE)
+    st.markdown(f"<div style='display:flex; align-items:center; gap:12px;'>"
+                f"{'<img src=\"'+LOGO_FILE+'\" width=\"48\" style=\"border-radius:8px;\">' if os.path.exists(LOGO_FILE) else ''}"
+                f"<h2 style='margin:0; color:{TEXT}'>{APP_TITLE}</h2></div>", unsafe_allow_html=True)
+    st.markdown("### Overview")
     kids = load_kids()
     att = load_att()
     progs = load_programs()
-    if role != "admin":
-        kids = kids[kids["program"]==user_program]
-        att = att[att["program"]==user_program]
     c1,c2,c3 = st.columns(3)
-    c1.metric("Total programs", len(progs) if role=="admin" else 1)
+    c1.metric("Total programs", len(progs))
     c2.metric("Total kids", kids.shape[0])
     c3.metric("Attendance records", att.shape[0])
     st.markdown("---")
@@ -240,7 +254,7 @@ if menu == "Dashboard":
         merged = merged.rename(columns={"date":"Date","name":"Kid","present":"Present","marked_by":"Marked by","note":"Note","timestamp":"When","program":"Program"})
         st.dataframe(merged[["When","Date","Kid","Program","Present","Marked by","Note"]])
 
-# ---------------- Manage Programs ----------------
+# ---------------- Admin Tools ----------------
 if admin_tool == "Manage Programs":
     st.header("Manage Programs")
     progs = load_programs()
@@ -258,26 +272,32 @@ if admin_tool == "Manage Programs":
                     st.warning("Program already exists.")
     st.stop()
 
-# ---------------- Manage Users ----------------
 if admin_tool == "Manage Users":
     st.header("Manage Users")
     users = load_users()
     st.subheader("Existing users")
-    st.dataframe(users[["username","role","program","full_name"]])
+    if users.empty:
+        st.write("No users yet.")
+    else:
+        st.dataframe(users[["username","role","program","full_name"]]
+                     .rename(columns={"username":"Username","role":"Role","program":"Program","full_name":"Full name"}))
+
+    # Load existing programs for dropdown
     progs = load_programs()
     prog_list = sorted(progs["program"].dropna().tolist())
+
     st.subheader("Create User")
     with st.form("create_user"):
         un = st.text_input("Username")
         fn = st.text_input("Full name")
         pw = st.text_input("Password")
-        role_choice = st.selectbox("Role", ["admin", "user"], index=1)
+        role_choice = st.selectbox("Role", ["admin", "leader"], index=1)
         assign_prog = ""
         if role_choice != "admin":
             assign_prog = st.selectbox("Assign to program", prog_list)
         if st.form_submit_button("Create user"):
             if not un or not pw or (role_choice != "admin" and not assign_prog):
-                st.error("Fill all required fields.")
+                st.error("Please fill all required fields.")
             else:
                 ok, msg = add_user(un.strip(), pw.strip(), role_choice, program=assign_prog, full_name=fn.strip())
                 if ok:
@@ -287,32 +307,34 @@ if admin_tool == "Manage Users":
                     st.error(msg)
     st.stop()
 
-# ---------------- Reset ----------------
+
 if admin_tool == "System Reset":
-    st.warning("This will delete all data and recreate default admin.")
+    st.header("System Reset (Admin)")
+    st.warning("This will delete kids, attendance, programs and users (except default admin). Use with caution.")
     if st.button("Reset system"):
+        # remove files and recreate defaults
         for f in [KIDS_FILE, ATT_FILE, PROGRAMS_FILE, USERS_FILE]:
             if os.path.exists(f): os.remove(f)
         ensure_csv(USERS_FILE, ["username","password","role","program","full_name"], create_sample=True)
         ensure_csv(PROGRAMS_FILE, ["program"])
         ensure_csv(KIDS_FILE, ["id","name","age","gender","program","image_path"])
         ensure_csv(ATT_FILE, ["date","kid_id","present","note","program","marked_by","timestamp"])
-        st.success("System reset.")
+        st.success("System reset. Default admin/account recreated.")
         st.experimental_rerun()
 
-# ---------------- Kids ----------------
+# ---------------- Kids Management ----------------
 if menu == "Kids":
     st.header("Kids Management")
     kids = load_kids()
     programs_df = load_programs()
-    programs = sorted(list(set(programs_df["program"].dropna().tolist())))
+    programs = sorted(list(set(programs_df["program"].dropna().tolist() + kids["program"].dropna().unique().tolist())))
     st.subheader("Add a kid")
     with st.form("add_kid"):
         name = st.text_input("Full name")
         age = st.number_input("Age", min_value=1, max_value=30, value=6)
         gender = st.selectbox("Gender", ["Male","Female","Other"])
         if role == "admin":
-            program = st.selectbox("Program", programs) if programs else st.text_input("Program")
+            program = st.selectbox("Program", [""] + programs) if programs else st.text_input("Program")
         else:
             st.write(f"You are leader for: **{user_program}**")
             program = user_program
@@ -321,86 +343,190 @@ if menu == "Kids":
             if not name.strip():
                 st.error("Enter a name")
             else:
+                # ensure program exists in programs.csv
                 if program and program not in programs:
                     add_program(program)
-                add_kid(name.strip(), age, gender, program, image)
+                kid_id = add_kid(name.strip(), age, gender, program, image)
                 st.success("Kid added")
                 st.experimental_rerun()
 
     st.markdown("---")
     st.subheader("List of kids")
-    if role != "admin":
-        kids = kids[kids["program"]==user_program]
-    if kids.empty:
+    # filtering: admin sees all; leader sees only their program kids
+    kids = load_kids()
+    if role == "admin":
+        df_show = kids.copy()
+        prog_filter = st.selectbox("Filter by program", ["-- All --"] + programs)
+        if prog_filter and prog_filter != "-- All --":
+            df_show = df_show[df_show["program"]==prog_filter]
+    else:
+        df_show = kids[kids["program"]==user_program]
+
+    if df_show.empty:
         st.info("No kids to show.")
     else:
-        st.dataframe(kids)
+        for _, r in df_show.iterrows():
+            cols = st.columns([1,3,4,2])
+            with cols[0]:
+                if r["image_path"] and os.path.exists(r["image_path"]):
+                    st.image(r["image_path"], width=84)
+                else:
+                    st.write("🧒")
+            with cols[1]:
+                st.markdown(f"**{r['name']}**")
+                st.write(f"Age: {r['age']} • {r['gender']}")
+            with cols[2]:
+                st.write(f"Program: **{r['program']}**")
+                present, pct, total = stats_for_kid(r["id"])
+                st.write(f"Present days: {present} — Attendance: {pct}% (program days: {total})")
+            with cols[3]:
+                if st.button(f"View|{r['id']}", key=f"view_{r['id']}"):
+                    st.session_state.selected_kid = r['id']
+                    st.experimental_rerun()
+                if role in ("admin", "leader"):
+                    if st.button(f"Remove|{r['id']}", key=f"remove_{r['id']}"):
+                        remove_kid(r['id'])
+                        st.success("Kid removed")
+                        st.experimental_rerun()
 
-# ---------------- Attendance ----------------
+# ---------------- Attendance Marking ----------------
 if menu == "Attendance":
     st.header("Attendance")
     kids = load_kids()
     att = load_att()
     programs_df = load_programs()
-    programs = sorted(list(set(programs_df["program"].dropna().tolist())))
+    programs = sorted(list(set(programs_df["program"].dropna().tolist() + kids["program"].dropna().unique().tolist())))
     att_date = st.date_input("Attendance date", value=date.today())
     att_str = att_date.isoformat()
     if role == "admin":
-        prog_choice = st.selectbox("Select program", programs)
-        scope = kids[kids["program"]==prog_choice] if prog_choice else kids.copy()
+        prog_choice = st.selectbox("Select program", ["-- All --"] + programs)
+        if prog_choice and prog_choice != "-- All --":
+            scope = kids[kids["program"]==prog_choice]
+        else:
+            scope = kids.copy()
     else:
         scope = kids[kids["program"]==user_program]
+
     if scope.empty:
         st.info("No kids to mark attendance for.")
     else:
+        st.subheader(f"Mark attendance for {len(scope)} kids")
         existing = att[att["date"]==att_str]
         present_defaults = {r["kid_id"]: int(r["present"])==1 for _,r in existing.iterrows()}
         notes_defaults = {r["kid_id"]: r.get("note","") for _,r in existing.iterrows()}
+
         with st.form("mark_att"):
             checked_map = {}
             notes_map = {}
             for _, k in scope.iterrows():
                 cols = st.columns([1,4,3])
                 with cols[0]:
-                    checked = st.checkbox("", value=present_defaults.get(k["id"], False))
+                    checked = st.checkbox("", value=present_defaults.get(k["id"], False), key=f"chk_{k['id']}")
                 with cols[1]:
                     st.markdown(f"**{k['name']}**")
                     st.write(f"Program: {k['program']}")
                 with cols[2]:
-                    note = st.text_input("Note", value=notes_defaults.get(k["id"], ""))
+                    note = st.text_input("Note", value=notes_defaults.get(k["id"], ""), key=f"note_{k['id']}")
                 checked_map[k["id"]] = checked
                 notes_map[k["id"]] = note
             if st.form_submit_button("Save attendance"):
-                new_att = att[att["date"]!=att_str]
+                new_att = att[att["date"]!=att_str]  # remove entries for date
                 now = datetime.now().isoformat(timespec="seconds")
                 for kid_id, is_present in checked_map.items():
-                    kid_prog = kids[kids["id"]==kid_id]["program"].values[0]
-                    row = {
-                        "date": att_str,
-                        "kid_id": kid_id,
-                        "present": 1 if is_present else 0,
-                        "note": notes_map.get(kid_id,""),
-                        "program": kid_prog,
-                        "marked_by": username,
-                        "timestamp": now
-                    }
+                    kid_prog = kids[kids["id"]==kid_id]["program"].values[0] if not kids.empty else ""
+                    row = {"date":att_str, "kid_id":kid_id, "present":1 if is_present else 0, "note": notes_map.get(kid_id,""), "program": kid_prog, "marked_by": username, "timestamp": now}
                     new_att = pd.concat([new_att, pd.DataFrame([row])], ignore_index=True)
                 save_att(new_att)
                 st.success("Attendance saved.")
                 st.experimental_rerun()
 
-# ---------------- Profiles ----------------
+# ---------------- Child Profile ----------------
 if menu == "Profiles":
     st.header("Child Profile")
+    selected = st.session_state.get("selected_kid", None)
     kids = load_kids()
-    if role != "admin":
-        kids = kids[kids["program"]==user_program]
-    st.dataframe(kids)
+    if selected is None:
+        st.info("Select a kid from the 'Kids' list to view profile.")
+    else:
+        if selected not in kids["id"].values:
+            st.error("Kid not found.")
+        else:
+            kid = kids[kids["id"]==selected].iloc[0]
+            # access check
+            if role == "leader" and kid["program"] != user_program:
+                st.error("You don't have access to this kid.")
+            else:
+                c1,c2,c3 = st.columns([1,2,4])
+                with c1:
+                    if kid["image_path"] and os.path.exists(kid["image_path"]):
+                        st.image(kid["image_path"], width=180)
+                    else:
+                        st.write("No image")
+                with c2:
+                    st.subheader(kid["name"])
+                    st.write(f"Age: {kid['age']}")
+                    st.write(f"Gender: {kid['gender']}")
+                    st.write(f"Program: {kid['program']}")
+                    if role in ("admin","leader"):
+                        if st.button("Edit kid"):
+                            st.session_state.edit_kid = kid["id"]
+                            st.experimental_rerun()
+                with c3:
+                    att = load_att()
+                    kid_att = att[att["kid_id"]==kid["id"]].sort_values("date", ascending=False)
+                    present_days = kid_att[kid_att["present"]==1].shape[0]
+                    total_prog_days = kid_att["date"].nunique()
+                    pct = (present_days/total_prog_days*100) if total_prog_days>0 else 0.0
+                    st.markdown("**Attendance summary**")
+                    st.write(f"Total records: {kid_att.shape[0]}")
+                    st.write(f"Days present: {present_days}")
+                    st.write(f"Attendance % (program days): {pct:.1f}%")
+                    st.markdown("---")
+                    st.subheader("Attendance history")
+                    if kid_att.empty:
+                        st.write("No records")
+                    else:
+                        display = kid_att.merge(kids[["id","name"]], left_on="kid_id", right_on="id", how="left")
+                        display = display[["date","present","note","marked_by","timestamp"]].rename(columns={"date":"Date","present":"Present","note":"Note","marked_by":"Marked by","timestamp":"When"})
+                        display["Present"] = display["Present"].apply(lambda x: "Yes" if int(x)==1 else "No")
+                        st.dataframe(display)
 
 # ---------------- Export ----------------
 if menu == "Export":
     st.header("Export Data")
+    st.write("Download CSVs for backup.")
     for fn, label in [(USERS_FILE,"users.csv"), (PROGRAMS_FILE,"programs.csv"), (KIDS_FILE,"kids.csv"), (ATT_FILE,"attendance.csv")]:
         if os.path.exists(fn):
             with open(fn,"rb") as f:
                 st.download_button(label, f, file_name=label)
+
+# ---------------- Edit kid modal ----------------
+if st.session_state.get("edit_kid", None):
+    kid_id = st.session_state.get("edit_kid")
+    kids = load_kids()
+    if kid_id not in kids["id"].values:
+        st.error("Kid not found.")
+    else:
+        kid = kids[kids["id"]==kid_id].iloc[0]
+        st.markdown("---")
+        st.header("Edit Kid")
+        with st.form("edit_kid"):
+            ename = st.text_input("Name", value=kid["name"])
+            eage = st.number_input("Age", min_value=1, max_value=30, value=int(kid["age"]))
+            egender = st.selectbox("Gender", ["Male","Female","Other"], index=["Male","Female","Other"].index(kid["gender"]) if kid["gender"] in ["Male","Female","Other"] else 2)
+            if role == "admin":
+                eprogram = st.selectbox("Program", [""]+programs, index=(programs.index(kid["program"]) if kid["program"] in programs else 0))
+            else:
+                eprogram = kid["program"]
+                st.write(f"Program: {eprogram}")
+            eimage = st.file_uploader("Replace image (optional)", type=["png","jpg","jpeg"])
+            if st.form_submit_button("Save changes"):
+                # save image if any
+                image_path = kid["image_path"]
+                if eimage is not None:
+                    image_path = save_kid_image(eimage, ename, kid_id)
+                kids.loc[kids["id"]==kid_id, ["name","age","gender","program","image_path"]] = [ename, int(eage), egender, eprogram, image_path]
+                save_kids(kids)
+                st.success("Kid updated.")
+                del st.session_state["edit_kid"]
+                st.experimental_rerun()
