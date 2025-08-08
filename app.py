@@ -207,7 +207,7 @@ st.sidebar.markdown("---")
 if st.sidebar.button("Log out"):
     for k in ["logged_in","username","role","program","full_name"]:
         if k in st.session_state: del st.session_state[k]
-    st.experimental_rerun()
+    st.rerun()
 
 admin_tool = None
 if role == "admin":
@@ -254,7 +254,7 @@ if admin_tool == "Manage Programs":
                 ok = add_program(p.strip())
                 if ok:
                     st.success("Program added.")
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.warning("Program already exists.")
     st.stop()
@@ -281,7 +281,7 @@ if admin_tool == "Manage Users":
                 ok, msg = add_user(uname, pwd, role_choice, program=assign_prog, full_name=fname)
                 if ok:
                     st.success("User created.")
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error(msg)
     st.stop()
@@ -297,7 +297,7 @@ if admin_tool == "System Reset":
         ensure_csv(KIDS_CSV, ["id","name","age","gender","program","image_path"])
         ensure_csv(ATT_CSV, ["date","kid_id","present","note","program","marked_by","timestamp"])
         st.success("System reset.")
-        st.experimental_rerun()
+        st.rerun()
 
 # ---------------- Kids Management ----------------
 if menu == "Kids":
@@ -324,7 +324,7 @@ if menu == "Kids":
                     add_program(program)
                 kid_id = add_kid(name.strip(), age, gender, program, image)
                 st.success("Kid added.")
-                st.experimental_rerun()
+                st.rerun()
 
     st.markdown("---")
     st.subheader("Kids list")
@@ -357,12 +357,12 @@ if menu == "Kids":
             with cols[3]:
                 if st.button(f"View|{r['id']}", key=f"view_{r['id']}"):
                     st.session_state.selected_kid = r['id']
-                    st.experimental_rerun()
+                    st.rerun()
                 if role in ("admin","leader"):
                     if st.button(f"Remove|{r['id']}", key=f"remove_{r['id']}"):
                         remove_kid(r["id"])
                         st.success("Kid removed")
-                        st.experimental_rerun()
+                        st.rerun()
 
 # ---------------- Attendance ----------------
 if menu == "Attendance":
@@ -413,7 +413,7 @@ if menu == "Attendance":
                     new_att = pd.concat([new_att, pd.DataFrame([row])], ignore_index=True)
                 save_att(new_att)
                 st.success("Attendance saved.")
-                st.experimental_rerun()
+                st.rerun()
 
 # ---------------- Profiles ----------------
 if menu == "Profiles":
@@ -444,7 +444,7 @@ if menu == "Profiles":
                     if role in ("admin","leader"):
                         if st.button("Edit kid"):
                             st.session_state.edit_kid = kid["id"]
-                            st.experimental_rerun()
+                            st.rerun()
                 with c3:
                     att = load_att()
                     kid_att = att[att["kid_id"]==kid["id"]].sort_values("date", ascending=False)
@@ -504,4 +504,4 @@ if st.session_state.get("edit_kid", None):
                 save_kids(kids)
                 st.success("Kid updated.")
                 del st.session_state["edit_kid"]
-                st.experimental_rerun()
+                st.rerun()
