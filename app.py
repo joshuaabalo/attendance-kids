@@ -4,40 +4,36 @@ from datetime import datetime
 
 # ---------- DATABASE SETUP ----------
 def init_db():
-    conn = sqlite3.connect("kids_app.db")
+    conn = sqlite3.connect('kids.db')
     c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT UNIQUE,
+                  password TEXT,
+                  role TEXT)''')
 
-    c.execute("""CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        role TEXT
-    )""")
+    c.execute('''CREATE TABLE IF NOT EXISTS kids
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT,
+                  program TEXT,
+                  age INTEGER,
+                  gender TEXT)''')
 
-    c.execute("""CREATE TABLE IF NOT EXISTS kids (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        age INTEGER,
-        program TEXT
-    )""")
+    c.execute('''CREATE TABLE IF NOT EXISTS attendance
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  kid_id INTEGER,
+                  date TEXT,
+                  status TEXT,
+                  FOREIGN KEY (kid_id) REFERENCES kids (id))''')
 
-    c.execute("""CREATE TABLE IF NOT EXISTS attendance (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        kid_id INTEGER,
-        date TEXT,
-        status TEXT,
-        FOREIGN KEY (kid_id) REFERENCES kids(id)
-    )""")
+    c.execute('''CREATE TABLE IF NOT EXISTS feedback
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  kid_id INTEGER,
+                  date TEXT,
+                  comments TEXT,
+                  FOREIGN KEY (kid_id) REFERENCES kids (id))''')
 
-    c.execute("""CREATE TABLE IF NOT EXISTS feedback (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        kid_id INTEGER,
-        date TEXT,
-        feedback TEXT,
-        FOREIGN KEY (kid_id) REFERENCES kids(id)
-    )""")
-
-    # Create default admin if not exists
+    # Create default admin account
     c.execute("SELECT * FROM users WHERE username = 'admin'")
     if not c.fetchone():
         c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
@@ -46,207 +42,212 @@ def init_db():
     conn.commit()
     conn.close()
 
-init_db()
-
-# ---------- HELPER FUNCTIONS ----------
+# ---------- USER FUNCTIONS ----------
 def add_user(username, password, role):
-    conn = sqlite3.connect("kids_app.db")
+    conn = sqlite3.connect('kids.db')
     c = conn.cursor()
     try:
         c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
                   (username, password, role))
         conn.commit()
-        return True
     except sqlite3.IntegrityError:
-        return False
-    finally:
-        conn.close()
+        st.error("Username already exists.")
+    conn.close()
 
-def get_users():
-    conn = sqlite3.connect("kids_app.db")
+def get_user(username, password):
+    conn = sqlite3.connect('kids.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
+    user = c.fetchone()
+    conn.close()
+    return user
+
+def get_all_users():
+    conn = sqlite3.connect('kids.db')
     c = conn.cursor()
     c.execute("SELECT id, username, role FROM users")
-    data = c.fetchall()
+    users = c.fetchall()
     conn.close()
-    return data
+    return users
 
-def remove_user(user_id):
-    conn = sqlite3.connect("kids_app.db")
+def delete_user(user_id):
+    conn = sqlite3.connect('kids.db')
     c = conn.cursor()
-    c.execute("DELETE FROM users WHERE id=?", (user_id,))
+    c.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()
 
-def add_kid(name, age, program):
-    conn = sqlite3.connect("kids_app.db")
+# ---------- KIDS FUNCTIONS ----------
+def add_kid(name, program, age, gender):
+    conn = sqlite3.connect('kids.db')
     c = conn.cursor()
-    c.execute("INSERT INTO kids (name, age, program) VALUES (?, ?, ?)",
-              (name, age, program))
+    c.execute("INSERT INTO kids (name, program, age, gender) VALUES (?, ?, ?, ?)",
+              (name, program, age, gender))
     conn.commit()
     conn.close()
 
-def get_kids():
-    conn = sqlite3.connect("kids_app.db")
+def get_all_kids():
+    conn = sqlite3.connect('kids.db')
     c = conn.cursor()
-    c.execute("SELECT id, name, age, program FROM kids")
-    data = c.fetchall()
+    c.execute("SELECT * FROM kids")
+    kids = c.fetchall()
     conn.close()
-    return data
+    return kids
 
-def remove_kid(kid_id):
-    conn = sqlite3.connect("kids_app.db")
+def delete_kid(kid_id):
+    conn = sqlite3.connect('kids.db')
     c = conn.cursor()
-    c.execute("DELETE FROM kids WHERE id=?", (kid_id,))
+    c.execute("DELETE FROM kids WHERE id = ?", (kid_id,))
+    c.execute("DELETE FROM attendance WHERE kid_id = ?", (kid_id,))
+    c.execute("DELETE FROM feedback WHERE kid_id = ?", (kid_id,))
     conn.commit()
     conn.close()
 
+# ---------- ATTENDANCE FUNCTIONS ----------
 def mark_attendance(kid_id, status):
-    conn = sqlite3.connect("kids_app.db")
+    conn = sqlite3.connect('kids.db')
     c = conn.cursor()
+    date = datetime.now().strftime("%Y-%m-%d")
     c.execute("INSERT INTO attendance (kid_id, date, status) VALUES (?, ?, ?)",
-              (kid_id, datetime.now().strftime("%Y-%m-%d"), status))
+              (kid_id, date, status))
     conn.commit()
     conn.close()
 
-def give_feedback(kid_id, feedback):
-    conn = sqlite3.connect("kids_app.db")
+def get_attendance(kid_id):
+    conn = sqlite3.connect('kids.db')
     c = conn.cursor()
-    c.execute("INSERT INTO feedback (kid_id, date, feedback) VALUES (?, ?, ?)",
-              (kid_id, datetime.now().strftime("%Y-%m-%d"), feedback))
+    c.execute("SELECT date, status FROM attendance WHERE kid_id = ?", (kid_id,))
+    attendance = c.fetchall()
+    conn.close()
+    return attendance
+
+# ---------- FEEDBACK FUNCTIONS ----------
+def add_feedback(kid_id, comments):
+    conn = sqlite3.connect('kids.db')
+    c = conn.cursor()
+    date = datetime.now().strftime("%Y-%m-%d")
+    c.execute("INSERT INTO feedback (kid_id, date, comments) VALUES (?, ?, ?)",
+              (kid_id, date, comments))
     conn.commit()
     conn.close()
 
-def get_kid_profile(kid_id):
-    conn = sqlite3.connect("kids_app.db")
+def get_feedback(kid_id):
+    conn = sqlite3.connect('kids.db')
     c = conn.cursor()
-    c.execute("SELECT name, age, program FROM kids WHERE id=?", (kid_id,))
-    kid_info = c.fetchone()
-
-    c.execute("SELECT date, status FROM attendance WHERE kid_id=?", (kid_id,))
-    attendance_data = c.fetchall()
-
-    c.execute("SELECT date, feedback FROM feedback WHERE kid_id=?", (kid_id,))
-    feedback_data = c.fetchall()
-
+    c.execute("SELECT date, comments FROM feedback WHERE kid_id = ?", (kid_id,))
+    feedback = c.fetchall()
     conn.close()
-    return kid_info, attendance_data, feedback_data
+    return feedback
 
-def check_login(username, password, role):
-    conn = sqlite3.connect("kids_app.db")
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE username=? AND password=? AND role=?",
-              (username, password, role))
-    data = c.fetchone()
-    conn.close()
-    return data
+# ---------- MAIN APP ----------
+def main():
+    st.title("Kids Attendance & Feedback System")
 
-# ---------- APP UI ----------
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.role = None
-
-if not st.session_state.logged_in:
-    st.title("Login Page")
-    role_choice = st.selectbox("Login as", ["admin", "user"])
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        if check_login(username, password, role_choice):
-            st.session_state.logged_in = True
-            st.session_state.role = role_choice
-            st.success(f"Logged in as {role_choice}")
-            st.experimental_rerun()
-        else:
-            st.error("Invalid credentials")
-
-else:
-    st.sidebar.title("Navigation")
-    choice = st.sidebar.radio("Go to", ["Dashboard", "Child Profile", "Logout"])
-
-    if choice == "Dashboard":
-        st.header("Dashboard")
-
-        if st.session_state.role == "admin":
-            st.subheader("Manage Users")
-            with st.form("add_user_form"):
-                new_user = st.text_input("New Username")
-                new_pass = st.text_input("Password", type="password")
-                new_role = st.selectbox("Role", ["user", "admin"])
-                if st.form_submit_button("Add User"):
-                    if add_user(new_user, new_pass, new_role):
-                        st.success("User added successfully")
-                    else:
-                        st.error("Username already exists")
-
-            users = get_users()
-            st.write("All Users")
-            for uid, uname, urole in users:
-                st.write(f"{uname} ({urole})")
-                if st.button(f"Remove User {uname}"):
-                    remove_user(uid)
-                    st.success("User removed")
-                    st.experimental_rerun()
-
-            st.subheader("Manage Kids")
-            with st.form("add_kid_form"):
-                kid_name = st.text_input("Kid Name")
-                kid_age = st.number_input("Age", min_value=1, max_value=18)
-                kid_program = st.text_input("Program/Project")
-                if st.form_submit_button("Add Kid"):
-                    add_kid(kid_name, kid_age, kid_program)
-                    st.success("Kid added successfully")
-
-            kids = get_kids()
-            st.write("All Kids")
-            for kid_id, name, age, program in kids:
-                st.write(f"{name} - {program}")
-                if st.button(f"Remove Kid {name}"):
-                    remove_kid(kid_id)
-                    st.success("Kid removed")
-                    st.experimental_rerun()
-
-        elif st.session_state.role == "user":
-            st.subheader("Kids Management")
-            kids = get_kids()
-            kid_names = {name: kid_id for kid_id, name, _, _ in kids}
-
-            st.write("Mark Attendance")
-            selected_kid = st.selectbox("Select Kid", list(kid_names.keys()))
-            status = st.selectbox("Status", ["Present", "Absent"])
-            if st.button("Submit Attendance"):
-                mark_attendance(kid_names[selected_kid], status)
-                st.success("Attendance recorded")
-
-            st.write("Give Feedback")
-            selected_kid_fb = st.selectbox("Select Kid for Feedback", list(kid_names.keys()))
-            feedback_text = st.text_area("Feedback")
-            if st.button("Submit Feedback"):
-                give_feedback(kid_names[selected_kid_fb], feedback_text)
-                st.success("Feedback recorded")
-
-    elif choice == "Child Profile":
-        kids = get_kids()
-        if kids:
-            kid_dict = {name: kid_id for kid_id, name, _, _ in kids}
-            selected = st.selectbox("Select a Child", list(kid_dict.keys()))
-            kid_info, attendance_data, feedback_data = get_kid_profile(kid_dict[selected])
-
-            st.subheader("Child Info")
-            st.write(f"Name: {kid_info[0]}")
-            st.write(f"Age: {kid_info[1]}")
-            st.write(f"Program: {kid_info[2]}")
-
-            st.subheader("Attendance History")
-            for date, status in attendance_data:
-                st.write(f"{date} - {status}")
-
-            st.subheader("Feedback History")
-            for date, fb in feedback_data:
-                st.write(f"{date} - {fb}")
-        else:
-            st.warning("No kids in database.")
-
-    elif choice == "Logout":
+    # Session state for login
+    if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
         st.session_state.role = None
-        st.experimental_rerun()
+
+    if not st.session_state.logged_in:
+        role_choice = st.selectbox("Login as", ["Admin", "User"])
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+
+        if st.button("Login"):
+            user = get_user(username, password)
+            if user and ((role_choice.lower() == "admin" and user[3] == "admin") or
+                         (role_choice.lower() == "user" and user[3] == "user")):
+                st.session_state.logged_in = True
+                st.session_state.role = user[3]
+                st.experimental_rerun()
+            else:
+                st.error("Invalid credentials or role.")
+    else:
+        st.sidebar.write(f"Logged in as: **{st.session_state.role}**")
+        menu = []
+
+        # Admin can see all
+        if st.session_state.role == "admin":
+            menu = ["Manage Users", "Add Kid", "Remove Kid", "Attendance", "Child Profiles"]
+        elif st.session_state.role == "user":
+            menu = ["Add Kid", "Attendance", "Child Profiles"]
+
+        choice = st.sidebar.selectbox("Menu", menu)
+
+        # Manage Users (Admin only)
+        if choice == "Manage Users" and st.session_state.role == "admin":
+            st.subheader("Manage Users")
+            with st.form("add_user_form"):
+                new_username = st.text_input("Username")
+                new_password = st.text_input("Password", type="password")
+                role = st.selectbox("Role", ["user", "admin"])
+                submitted = st.form_submit_button("Add User")
+                if submitted:
+                    add_user(new_username, new_password, role)
+                    st.success("User added successfully.")
+
+            users = get_all_users()
+            st.write("Existing Users")
+            for u in users:
+                st.write(f"ID: {u[0]}, Username: {u[1]}, Role: {u[2]}")
+                if st.button(f"Delete {u[1]}", key=f"deluser{u[0]}"):
+                    delete_user(u[0])
+                    st.experimental_rerun()
+
+        # Add Kid
+        elif choice == "Add Kid":
+            with st.form("add_kid_form"):
+                name = st.text_input("Name")
+                program = st.text_input("Program")
+                age = st.number_input("Age", min_value=1, max_value=18)
+                gender = st.selectbox("Gender", ["Male", "Female"])
+                submitted = st.form_submit_button("Add Kid")
+                if submitted:
+                    add_kid(name, program, age, gender)
+                    st.success("Kid added successfully.")
+
+        # Remove Kid (Admin only)
+        elif choice == "Remove Kid" and st.session_state.role == "admin":
+            kids = get_all_kids()
+            kid_dict = {f"{k[1]} ({k[2]})": k[0] for k in kids}
+            selected_kid = st.selectbox("Select Kid to Remove", list(kid_dict.keys()))
+            if st.button("Remove Kid"):
+                delete_kid(kid_dict[selected_kid])
+                st.success("Kid removed successfully.")
+                st.experimental_rerun()
+
+        # Attendance
+        elif choice == "Attendance":
+            kids = get_all_kids()
+            for kid in kids:
+                st.write(f"{kid[1]} ({kid[2]})")
+                col1, col2 = st.columns(2)
+                if col1.button(f"Present - {kid[0]}", key=f"present{kid[0]}"):
+                    mark_attendance(kid[0], "Present")
+                if col2.button(f"Absent - {kid[0]}", key=f"absent{kid[0]}"):
+                    mark_attendance(kid[0], "Absent")
+
+        # Child Profiles
+        elif choice == "Child Profiles":
+            kids = get_all_kids()
+            kid_dict = {f"{k[1]} ({k[2]})": k[0] for k in kids}
+            selected_kid = st.selectbox("Select Kid", list(kid_dict.keys()))
+            kid_id = kid_dict[selected_kid]
+            st.subheader(f"Profile: {selected_kid}")
+
+            st.write("**Attendance Records**")
+            for a in get_attendance(kid_id):
+                st.write(f"{a[0]} - {a[1]}")
+
+            st.write("**Feedback**")
+            for f in get_feedback(kid_id):
+                st.write(f"{f[0]} - {f[1]}")
+
+            feedback_text = st.text_area("Add Feedback")
+            if st.button("Submit Feedback"):
+                add_feedback(kid_id, feedback_text)
+                st.success("Feedback added successfully.")
+
+if __name__ == "__main__":
+    init_db()
+    main()
