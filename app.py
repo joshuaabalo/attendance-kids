@@ -1,8 +1,8 @@
 # app.py
 """
-Fafali Attendance Manager - tabs fixed
-Run: streamlit run app.py
-Requirements: pip install streamlit pandas openpyxl
+Fafali Attendance Manager - Fixed tabs + unique widget keys
+Run: pip install streamlit pandas openpyxl
+     streamlit run app.py
 """
 import streamlit as st
 import pandas as pd
@@ -22,8 +22,8 @@ KIDS_CSV = DATA_DIR / "kids.csv"
 PROGRAMS_CSV = DATA_DIR / "programs.csv"
 ATT_CSV = DATA_DIR / "attendance.csv"
 
-STARTER_XLSX = Path("/mnt/data/KidsT.xlsx")  # optional starter import if present
-DEFAULT_IMAGE = ""  # leave empty to show emoji placeholder
+STARTER_XLSX = Path("/mnt/data/KidsT.xlsx")  # optional starter import
+DEFAULT_IMAGE = ""  # placeholder (empty => emoji)
 
 # ---------- Helpers ----------
 def check_password(entered: str, stored: str) -> bool:
@@ -43,6 +43,7 @@ def atomic_save_csv(path: Path, df: pd.DataFrame):
                 os.remove(tmp.name)
             except Exception:
                 pass
+    # clear cache so reads reflect new data
     try:
         st.cache_data.clear()
     except Exception:
@@ -74,13 +75,14 @@ def calc_age(dob_str):
     except Exception:
         return ""
 
-# ---------- Initialization ----------
+# ---------- Init + starter import ----------
 def init_files_and_starter():
     ensure_csv(USERS_CSV, ["username","password","role","programs","full_name"])
     ensure_csv(KIDS_CSV, ["id","name","age","program","dob","gender","school","location","guardian_name","guardian_contact","relationship","image"])
     ensure_csv(PROGRAMS_CSV, ["program"])
     ensure_csv(ATT_CSV, ["date","kid_id","present","note","program","marked_by","timestamp"])
 
+    # default users
     users = load_csv(USERS_CSV)
     if users.empty:
         default = pd.DataFrame([
@@ -89,6 +91,7 @@ def init_files_and_starter():
         ])
         atomic_save_csv(USERS_CSV, default)
 
+    # optional starter kids import
     kids = load_csv(KIDS_CSV)
     if kids.empty and STARTER_XLSX.exists():
         try:
@@ -130,6 +133,7 @@ def init_files_and_starter():
                     rows.append(row)
                 if rows:
                     atomic_save_csv(KIDS_CSV, pd.DataFrame(rows))
+                    # add programs
                     progs = load_csv(PROGRAMS_CSV)
                     exist = [p.strip().lower() for p in progs.get("program",[])]
                     for p in {r["program"] for r in rows if r["program"]}:
@@ -186,11 +190,11 @@ def attempt_login(username: str, password: str, chosen_role: str):
 # ---------- Pages ----------
 def page_login():
     st.title(APP_TITLE)
-    st.write("Sign in as admin or leader. Default: admin / 123 and leader1 / 123")
+    st.write("Sign in as admin or leader. Default credentials: admin / 123, leader1 / 123")
     with st.form("login_form"):
-        role_choice = st.selectbox("Sign in as", ("admin","leader"))
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        role_choice = st.selectbox("Sign in as", ("admin","leader"), key="login_role")
+        username = st.text_input("Username", key="login_user")
+        password = st.text_input("Password", type="password", key="login_pw")
         submitted = st.form_submit_button("Sign in")
         if submitted:
             user = attempt_login(username.strip(), password, role_choice)
@@ -227,20 +231,20 @@ def page_kids():
 
     # program scope selection
     if st.session_state.user["role"].lower() == "admin":
-        prog_filter = st.selectbox("Filter by program", ["-- All --"] + progs)
+        prog_filter = st.selectbox("Filter by program", ["-- All --"] + progs, key="kids_prog_filter")
         chosen_prog = None if prog_filter == "-- All --" else prog_filter
     else:
         leader_progs = st.session_state.user.get("programs", [])
         if not leader_progs:
             st.info("No programs assigned. Contact admin.")
             return
-        prog_choice = st.selectbox("Choose program (leaders)", ["-- All my programs --"] + leader_progs)
+        prog_choice = st.selectbox("Choose program (leaders)", ["-- All my programs --"] + leader_progs, key="kids_leader_prog_choice")
         chosen_prog = None if prog_choice == "-- All my programs --" else prog_choice
 
-    loc_choice = st.selectbox("Filter by location", ["-- All --"] + ([""] + locations))
+    loc_choice = st.selectbox("Filter by location", ["-- All --"] + ([""] + locations), key="kids_loc_choice")
     chosen_loc = None if loc_choice == "-- All --" or loc_choice == "" else loc_choice
 
-    search = st.text_input("Search by name")
+    search = st.text_input("Search by name", key="kids_search")
 
     view = kids.copy()
     if st.session_state.user["role"].lower() != "admin":
@@ -252,69 +256,6 @@ def page_kids():
         view = view[view["location"] == chosen_loc]
     if search:
         view = view[view["name"].str.contains(search, case=False, na=False)]
-
-    # Excel import (Admin)
-    if st.session_state.user["role"].lower() == "admin":
-        st.subheader("Import from Excel (KidsT format)")
-        uploaded = st.file_uploader("Upload .xlsx / .xls (KidsT)", type=["xlsx","xls"])
-        if uploaded:
-            try:
-                df = pd.read_excel(uploaded)
-            except Exception as e:
-                st.error(f"Could not read Excel: {e}")
-                df = None
-            if df is not None:
-                req = {"Student ID","FirstName","LastName","Date of Birth","Gender","Current School","Project","Location","guardian_name","guardian_contact","Relationship"}
-                if not req.issubset(set(df.columns)):
-                    st.error("Excel must include columns: " + ", ".join(sorted(req)))
-                else:
-                    mapped = pd.DataFrame()
-                    mapped["id"] = df["Student ID"].astype(str).fillna("").replace("nan","")
-                    # generate missing ids avoiding collision
-                    existing_ids = set(load_csv(KIDS_CSV).get("id", []))
-                    gen_counter = 1
-                    gen_ids = []
-                    for val in mapped["id"].tolist():
-                        if str(val).strip() == "":
-                            gen = f"K{str(gen_counter).zfill(4)}"
-                            while gen in existing_ids:
-                                gen_counter += 1
-                                gen = f"K{str(gen_counter).zfill(4)}"
-                            gen_ids.append(gen)
-                            existing_ids.add(gen)
-                            gen_counter += 1
-                        else:
-                            gen_ids.append(val)
-                    mapped["id"] = gen_ids
-                    mapped["name"] = df["FirstName"].astype(str).str.strip() + " " + df["LastName"].astype(str).str.strip()
-                    mapped["dob"] = pd.to_datetime(df["Date of Birth"], errors="coerce").dt.date.astype(str)
-                    mapped["age"] = mapped["dob"].apply(calc_age)
-                    mapped["gender"] = df["Gender"].astype(str)
-                    mapped["school"] = df["Current School"].astype(str)
-                    mapped["program"] = df["Project"].astype(str)
-                    mapped["location"] = df["Location"].astype(str)
-                    mapped["guardian_name"] = df["guardian_name"].astype(str)
-                    mapped["guardian_contact"] = df["guardian_contact"].astype(str)
-                    mapped["relationship"] = df["Relationship"].astype(str)
-                    mapped["image"] = DEFAULT_IMAGE
-
-                    existing = load_csv(KIDS_CSV)
-                    combined = pd.concat([existing, mapped], ignore_index=True)
-                    before = len(existing)
-                    combined = combined.drop_duplicates(subset=["id"], keep="first")
-                    combined = combined.drop_duplicates(subset=["name","program"], keep="first")
-                    after = len(combined)
-                    added = max(0, after - before)
-                    st.subheader("Preview (new rows shown)")
-                    new_preview = combined[~combined["id"].isin(existing.get("id", []))]
-                    st.dataframe(new_preview)
-                    if st.button("Confirm import"):
-                        atomic_save_csv(KIDS_CSV, combined)
-                        for p in mapped["program"].unique():
-                            if str(p).strip():
-                                add_program_if_missing(p)
-                        st.success(f"Imported. {added} new kids added (duplicates skipped).")
-                        st.rerun()
 
     st.markdown("---")
     st.subheader(f"Kids ({len(view)})")
@@ -339,24 +280,28 @@ def page_kids():
                     st.markdown(f"**School:** {r.get('school','')}")
                     st.markdown(f"**Location:** {r.get('location','')}")
                     st.markdown(f"**Guardian:** {r.get('guardian_name','')} ({r.get('relationship','')}) — {r.get('guardian_contact','')}")
-                    btns = st.columns([1,1,1])
-                    if btns[0].button("View profile", key=f"view_{r['id']}"):
+                    btn_view = st.button("View profile", key=f"view_{r['id']}")
+                    btn_delete = None
+                    btn_open = st.button("Open profile (edit)", key=f"open_{r['id']}")
+                    if st.session_state.user["role"].lower() == "admin":
+                        btn_delete = st.button("Delete", key=f"del_{r['id']}")
+                    if btn_view:
                         st.session_state.selected_kid = r["id"]
                         st.rerun()
-                    if st.session_state.user["role"].lower() == "admin":
-                        if btns[1].button("Delete", key=f"del_{r['id']}"):
-                            st.session_state.pending_delete = {"type":"kid","id":r["id"],"name":r["name"]}
-                            st.rerun()
-                    if btns[2].button("Open profile (edit)", key=f"open_{r['id']}"):
+                    if btn_open:
                         st.session_state.selected_kid = r["id"]
+                        st.rerun()
+                    if btn_delete:
+                        st.session_state.pending_delete = {"type":"kid","id":r["id"],"name":r["name"]}
                         st.rerun()
 
+    # pending delete handling
     if st.session_state.get("pending_delete"):
         pdv = st.session_state["pending_delete"]
         if pdv.get("type") == "kid":
             st.warning(f"Confirm delete kid: {pdv.get('name')} (ID: {pdv.get('id')})")
             c1,c2 = st.columns(2)
-            if c1.button("Yes, delete"):
+            if c1.button("Yes, delete", key="confirm_delete_yes"):
                 dfk = load_csv(KIDS_CSV)
                 dfk = dfk[dfk["id"] != pdv.get("id")]
                 atomic_save_csv(KIDS_CSV, dfk)
@@ -366,27 +311,91 @@ def page_kids():
                 st.success("Kid deleted.")
                 st.session_state.pending_delete = None
                 st.rerun()
-            if c2.button("Cancel"):
+            if c2.button("Cancel", key="confirm_delete_no"):
                 st.session_state.pending_delete = None
                 st.rerun()
+
+def page_import():
+    # separate import tab so its widgets have unique keys
+    st.header("Import Kids (Excel - KidsT format)")
+    st.write("File must include these columns: Student ID, FirstName, LastName, Date of Birth, Gender, Current School, Project, Location, guardian_name, guardian_contact, Relationship")
+    uploaded = st.file_uploader("Upload .xlsx/.xls", type=["xlsx","xls"], key="import_file")
+    if uploaded:
+        try:
+            df = pd.read_excel(uploaded)
+        except Exception as e:
+            st.error(f"Could not read Excel: {e}")
+            df = None
+        if df is not None:
+            req = {"Student ID","FirstName","LastName","Date of Birth","Gender","Current School","Project","Location","guardian_name","guardian_contact","Relationship"}
+            if not req.issubset(set(df.columns)):
+                st.error("Excel missing required columns: " + ", ".join(sorted(req)))
+            else:
+                mapped = pd.DataFrame()
+                mapped["id"] = df["Student ID"].astype(str).fillna("").replace("nan","")
+                existing_ids = set(load_csv(KIDS_CSV).get("id", []))
+                gen_counter = 1
+                gen_ids = []
+                for val in mapped["id"].tolist():
+                    if str(val).strip() == "":
+                        gen = f"K{str(gen_counter).zfill(4)}"
+                        while gen in existing_ids:
+                            gen_counter += 1
+                            gen = f"K{str(gen_counter).zfill(4)}"
+                        gen_ids.append(gen)
+                        existing_ids.add(gen)
+                        gen_counter += 1
+                    else:
+                        gen_ids.append(val)
+                mapped["id"] = gen_ids
+                mapped["name"] = df["FirstName"].astype(str).str.strip() + " " + df["LastName"].astype(str).str.strip()
+                mapped["dob"] = pd.to_datetime(df["Date of Birth"], errors="coerce").dt.date.astype(str)
+                mapped["age"] = mapped["dob"].apply(calc_age)
+                mapped["gender"] = df["Gender"].astype(str)
+                mapped["school"] = df["Current School"].astype(str)
+                mapped["program"] = df["Project"].astype(str)
+                mapped["location"] = df["Location"].astype(str)
+                mapped["guardian_name"] = df["guardian_name"].astype(str)
+                mapped["guardian_contact"] = df["guardian_contact"].astype(str)
+                mapped["relationship"] = df["Relationship"].astype(str)
+                mapped["image"] = DEFAULT_IMAGE
+
+                existing = load_csv(KIDS_CSV)
+                combined = pd.concat([existing, mapped], ignore_index=True)
+                before = len(existing)
+                combined = combined.drop_duplicates(subset=["id"], keep="first")
+                combined = combined.drop_duplicates(subset=["name","program"], keep="first")
+                after = len(combined)
+                added = max(0, after - before)
+                st.subheader("Preview (new rows shown)")
+                new_preview = combined[~combined["id"].isin(existing.get("id", []))]
+                st.dataframe(new_preview)
+                if st.button("Confirm import", key="confirm_import"):
+                    atomic_save_csv(KIDS_CSV, combined)
+                    for p in mapped["program"].unique():
+                        if str(p).strip():
+                            add_program_if_missing(p)
+                    st.success(f"Imported. {added} new kids added (duplicates skipped).")
+                    st.rerun()
 
 def page_attendance():
     st.header("Attendance")
     kids = load_csv(KIDS_CSV)
     if kids.empty:
-        st.info("No kids in database.")
+        st.info("No kids available.")
         return
 
+    # scope
     if st.session_state.user["role"].lower() == "admin":
         progs = sorted(list({str(x).strip() for x in kids.get("program",[]) if str(x).strip()}))
-        prog_choice = st.selectbox("Program (admin)", ["-- All --"] + progs)
+        prog_choice = st.selectbox("Program (admin)", ["-- All --"] + progs, key="att_prog_admin")
         prog_scope = None if prog_choice == "-- All --" else prog_choice
     else:
         programs = st.session_state.user.get("programs", [])
         if not programs:
             st.info("No programs assigned.")
             return
-        prog_choice = st.selectbox("Choose program", ["-- Select --"] + programs)
+        prog_choice = st.selectbox("Choose program", ["-- Select --"] + programs, key="att_prog_leader")
         prog_scope = None if prog_choice == "-- Select --" else prog_choice
 
     if prog_scope:
@@ -398,11 +407,11 @@ def page_attendance():
             scope = kids[kids["program"].isin(st.session_state.user.get("programs", []))]
 
     if scope.empty:
-        st.info("No kids in scope.")
+        st.info("No kids in the selected scope.")
         return
 
     att = load_csv(ATT_CSV)
-    att_date = st.date_input("Attendance date", value=date.today())
+    att_date = st.date_input("Attendance date", value=date.today(), key="att_date")
     att_str = att_date.isoformat()
 
     existing = att[att["date"] == att_str]
@@ -410,14 +419,14 @@ def page_attendance():
     notes_defaults = {row["kid_id"]: row.get("note","") for _,row in existing.iterrows()}
 
     c1,c2,_ = st.columns([1,1,6])
-    if c1.button("All present"):
+    if c1.button("All present", key="att_all_present"):
         for kid_id in scope["id"].tolist():
             present_defaults[kid_id] = True
-    if c2.button("All absent"):
+    if c2.button("All absent", key="att_all_absent"):
         for kid_id in scope["id"].tolist():
             present_defaults[kid_id] = False
 
-    with st.form("mark_att"):
+    with st.form("attendance_form"):
         checked = {}
         notes = {}
         for _, k in scope.sort_values("name").iterrows():
@@ -431,7 +440,7 @@ def page_attendance():
                 note = st.text_input("Note", value=notes_defaults.get(k["id"], ""), key=f"note_{k['id']}")
             checked[k["id"]] = val
             notes[k["id"]] = note
-        if st.form_submit_button("Save attendance"):
+        if st.form_submit_button("Save attendance", key="save_att_button"):
             new_att = att[att["date"] != att_str]
             now = datetime.now().isoformat(timespec="seconds")
             for kid_id, is_present in checked.items():
@@ -494,8 +503,8 @@ def page_programs():
     if st.session_state.user["role"].lower() == "admin":
         st.subheader("Existing programs")
         st.write(sorted(progs))
-        new = st.text_input("New program")
-        if st.button("Add program"):
+        new = st.text_input("New program", key="prog_new_input")
+        if st.button("Add program", key="prog_add_btn"):
             if new.strip():
                 add_program_if_missing(new.strip())
                 st.success("Added")
@@ -510,27 +519,27 @@ def page_export():
     for p,label in [(USERS_CSV,"users.csv"), (KIDS_CSV,"kids.csv"), (PROGRAMS_CSV,"programs.csv"), (ATT_CSV,"attendance.csv")]:
         if p.exists():
             with open(p,"rb") as f:
-                st.download_button(label, f, file_name=label)
+                st.download_button(label, f, file_name=label, key=f"export_{label}")
 
 def page_admin_tools():
     if st.session_state.user["role"].lower() != "admin":
         st.error("Admin only.")
         return
-    st.header("Admin Tools")
+    st.header("Admin Tools - Users")
     users = load_csv(USERS_CSV)
     if not users.empty:
         st.dataframe(users)
     st.subheader("Create user")
-    with st.form("create_user"):
-        uname = st.text_input("Username")
-        fname = st.text_input("Full name")
-        pwd = st.text_input("Password")
-        role_choice = st.selectbox("Role", ("leader","admin"))
-        prog_assign = st.text_input("Assign programs (comma separated)")
-        submitted = st.form_submit_button("Create")
+    with st.form("create_user_form"):
+        uname = st.text_input("Username", key="create_uname")
+        fname = st.text_input("Full name", key="create_fname")
+        pwd = st.text_input("Password", key="create_pwd")
+        role_choice = st.selectbox("Role", ("leader","admin"), key="create_role")
+        prog_assign = st.text_input("Assign programs (comma separated)", key="create_prog")
+        submitted = st.form_submit_button("Create user", key="create_user_btn")
         if submitted:
             if not (uname and pwd):
-                st.error("Provide username and password.")
+                st.error("Username and password required.")
             else:
                 ok,msg = create_user(uname.strip(), pwd, role_choice, programs=prog_assign, full_name=fname)
                 if ok:
@@ -540,14 +549,15 @@ def page_admin_tools():
                     st.rerun()
                 else:
                     st.error(msg)
+
     st.markdown("---")
-    st.subheader("Change own password")
+    st.subheader("Change own password (admin)")
     users = load_csv(USERS_CSV)
     me = users[users["username"] == st.session_state.user["username"]].iloc[0]
-    with st.form("admin_change_pass"):
-        old = st.text_input("Old password", type="password")
-        newp = st.text_input("New password", type="password")
-        if st.form_submit_button("Change password"):
+    with st.form("admin_change_pass_form"):
+        old = st.text_input("Old password", type="password", key="admin_old_pw")
+        newp = st.text_input("New password", type="password", key="admin_new_pw")
+        if st.form_submit_button("Change password", key="admin_change_btn"):
             if not check_password(old, me["password"]):
                 st.error("Old password incorrect.")
             else:
@@ -560,7 +570,6 @@ def page_admin_tools():
 st.set_page_config(APP_TITLE, layout="wide")
 init_files_and_starter()
 
-# session defaults
 if "user" not in st.session_state:
     st.session_state.user = None
 if "selected_kid" not in st.session_state:
@@ -572,9 +581,9 @@ if not st.session_state.user:
     page_login()
     st.stop()
 
-# Build tabs and render inside each tab context (correct Streamlit pattern)
+# ---------- Tabs (render inside each tab context) ----------
 if st.session_state.user["role"].lower() == "admin":
-    tabs_list = ["Dashboard","Kids","Attendance","Programs","Profiles","Import","Export","Admin Tools","Account","Logout"]
+    tabs_list = ["Dashboard","Kids","Import","Attendance","Programs","Profiles","Export","Admin Tools","Account","Logout"]
 else:
     tabs_list = ["Kids","Attendance","Profiles","Account","Logout"]
 
@@ -586,15 +595,14 @@ for name, tab in zip(tabs_list, tabs_objs):
             page_dashboard()
         elif name == "Kids":
             page_kids()
+        elif name == "Import":
+            page_import()
         elif name == "Attendance":
             page_attendance()
         elif name == "Programs":
             page_programs()
         elif name == "Profiles":
             page_profiles()
-        elif name == "Import":
-            # import area lives in kids page - call same function
-            page_kids()
         elif name == "Export":
             page_export()
         elif name == "Admin Tools":
@@ -604,10 +612,10 @@ for name, tab in zip(tabs_list, tabs_objs):
             st.write(f"Signed in: {st.session_state.user['full_name']} ({st.session_state.user['role']})")
             users = load_csv(USERS_CSV)
             me = users[users["username"] == st.session_state.user["username"]].iloc[0]
-            with st.form("change_pass_self"):
-                old = st.text_input("Old password", type="password")
-                newp = st.text_input("New password", type="password")
-                if st.form_submit_button("Change password"):
+            with st.form("account_change_pass_form"):
+                old = st.text_input("Old password", type="password", key="acct_old_pw")
+                newp = st.text_input("New password", type="password", key="acct_new_pw")
+                if st.form_submit_button("Change password", key="acct_change_btn"):
                     if not check_password(old, me["password"]):
                         st.error("Old password incorrect.")
                     else:
@@ -616,8 +624,8 @@ for name, tab in zip(tabs_list, tabs_objs):
                         st.success("Password changed. Please log out and log in again.")
                         st.rerun()
         elif name == "Logout":
-            st.write("Click to log out")
-            if st.button("Log out"):
+            st.write("Click below to log out.")
+            if st.button("Log out", key="logout_btn"):
                 st.session_state.user = None
                 st.session_state.selected_kid = None
                 st.rerun()
