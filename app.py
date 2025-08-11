@@ -1,18 +1,13 @@
 # app.py
 """
-Complete Fafali Attendance Manager (single-file)
-
-Requirements:
-    pip install streamlit pandas openpyxl
-Run:
-    streamlit run app.py
+Fafali Attendance Manager - tabs fixed
+Run: streamlit run app.py
+Requirements: pip install streamlit pandas openpyxl
 """
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-import tempfile
-import shutil
-import os
+import tempfile, shutil, os
 from datetime import date, datetime
 
 # ---------- Config ----------
@@ -27,12 +22,11 @@ KIDS_CSV = DATA_DIR / "kids.csv"
 PROGRAMS_CSV = DATA_DIR / "programs.csv"
 ATT_CSV = DATA_DIR / "attendance.csv"
 
-STARTER_XLSX = Path("/mnt/data/KidsT.xlsx")  # optional starter file in this environment
-DEFAULT_IMAGE = ""  # set to path or URL if you prefer an avatar
+STARTER_XLSX = Path("/mnt/data/KidsT.xlsx")  # optional starter import if present
+DEFAULT_IMAGE = ""  # leave empty to show emoji placeholder
 
 # ---------- Helpers ----------
 def check_password(entered: str, stored: str) -> bool:
-    """Simple plain-text check (you requested simple passwords)."""
     return str(entered) == str(stored)
 
 def atomic_save_csv(path: Path, df: pd.DataFrame):
@@ -42,7 +36,6 @@ def atomic_save_csv(path: Path, df: pd.DataFrame):
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".tmp", dir=str(path.parent))
         tmp.close()
         df.to_csv(tmp.name, index=False)
-        # move into place (atomic on most OS)
         shutil.move(tmp.name, str(path))
     finally:
         if tmp is not None and os.path.exists(tmp.name):
@@ -50,7 +43,6 @@ def atomic_save_csv(path: Path, df: pd.DataFrame):
                 os.remove(tmp.name)
             except Exception:
                 pass
-    # clear cached loads
     try:
         st.cache_data.clear()
     except Exception:
@@ -82,14 +74,13 @@ def calc_age(dob_str):
     except Exception:
         return ""
 
-# ---------- Initialize files + optional starter import ----------
+# ---------- Initialization ----------
 def init_files_and_starter():
-    ensure_csv(USERS_CSV, ["username", "password", "role", "programs", "full_name"])
+    ensure_csv(USERS_CSV, ["username","password","role","programs","full_name"])
     ensure_csv(KIDS_CSV, ["id","name","age","program","dob","gender","school","location","guardian_name","guardian_contact","relationship","image"])
     ensure_csv(PROGRAMS_CSV, ["program"])
     ensure_csv(ATT_CSV, ["date","kid_id","present","note","program","marked_by","timestamp"])
 
-    # create default users if none
     users = load_csv(USERS_CSV)
     if users.empty:
         default = pd.DataFrame([
@@ -98,7 +89,6 @@ def init_files_and_starter():
         ])
         atomic_save_csv(USERS_CSV, default)
 
-    # starter import from STARTER_XLSX if kids empty
     kids = load_csv(KIDS_CSV)
     if kids.empty and STARTER_XLSX.exists():
         try:
@@ -140,23 +130,20 @@ def init_files_and_starter():
                     rows.append(row)
                 if rows:
                     atomic_save_csv(KIDS_CSV, pd.DataFrame(rows))
-                    # add programs detected
                     progs = load_csv(PROGRAMS_CSV)
-                    existing = [p.strip().lower() for p in progs.get("program",[])]
+                    exist = [p.strip().lower() for p in progs.get("program",[])]
                     for p in {r["program"] for r in rows if r["program"]}:
-                        if p.strip().lower() not in existing:
+                        if p.strip().lower() not in exist:
                             progs = pd.concat([progs, pd.DataFrame([{"program":p}])], ignore_index=True)
                     if not progs.empty:
                         atomic_save_csv(PROGRAMS_CSV, progs)
         except Exception:
-            # fail silently; admin can import manually
             pass
 
 # ---------- Domain helpers ----------
 def add_program_if_missing(name: str):
     name = str(name).strip()
-    if not name:
-        return
+    if not name: return
     progs = load_csv(PROGRAMS_CSV)
     existing = [p.strip().lower() for p in progs.get("program",[])]
     if name.lower() not in existing:
@@ -196,10 +183,10 @@ def attempt_login(username: str, password: str, chosen_role: str):
     programs = [p.strip() for p in progs_raw.split(",") if p.strip()]
     return {"username": user["username"], "role": user["role"], "programs": programs, "full_name": user.get("full_name", user["username"])}
 
-# ---------- Pages (functions) ----------
+# ---------- Pages ----------
 def page_login():
     st.title(APP_TITLE)
-    st.write("Sign in as admin or leader. Default: admin / 123  and leader1 / 123")
+    st.write("Sign in as admin or leader. Default: admin / 123 and leader1 / 123")
     with st.form("login_form"):
         role_choice = st.selectbox("Sign in as", ("admin","leader"))
         username = st.text_input("Username")
@@ -271,7 +258,6 @@ def page_kids():
         st.subheader("Import from Excel (KidsT format)")
         uploaded = st.file_uploader("Upload .xlsx / .xls (KidsT)", type=["xlsx","xls"])
         if uploaded:
-            # read with openpyxl (if present). If not present, show friendly message.
             try:
                 df = pd.read_excel(uploaded)
             except Exception as e:
@@ -324,7 +310,6 @@ def page_kids():
                     st.dataframe(new_preview)
                     if st.button("Confirm import"):
                         atomic_save_csv(KIDS_CSV, combined)
-                        # add programs discovered
                         for p in mapped["program"].unique():
                             if str(p).strip():
                                 add_program_if_missing(p)
@@ -366,7 +351,6 @@ def page_kids():
                         st.session_state.selected_kid = r["id"]
                         st.rerun()
 
-    # handle pending delete
     if st.session_state.get("pending_delete"):
         pdv = st.session_state["pending_delete"]
         if pdv.get("type") == "kid":
@@ -393,7 +377,6 @@ def page_attendance():
         st.info("No kids in database.")
         return
 
-    # program scope
     if st.session_state.user["role"].lower() == "admin":
         progs = sorted(list({str(x).strip() for x in kids.get("program",[]) if str(x).strip()}))
         prog_choice = st.selectbox("Program (admin)", ["-- All --"] + progs)
@@ -523,7 +506,7 @@ def page_programs():
         st.info("Leaders cannot manage programs.")
 
 def page_export():
-    st.header("Export data")
+    st.header("Export")
     for p,label in [(USERS_CSV,"users.csv"), (KIDS_CSV,"kids.csv"), (PROGRAMS_CSV,"programs.csv"), (ATT_CSV,"attendance.csv")]:
         if p.exists():
             with open(p,"rb") as f:
@@ -558,7 +541,7 @@ def page_admin_tools():
                 else:
                     st.error(msg)
     st.markdown("---")
-    st.subheader("Change own password (admin area)")
+    st.subheader("Change own password")
     users = load_csv(USERS_CSV)
     me = users[users["username"] == st.session_state.user["username"]].iloc[0]
     with st.form("admin_change_pass"):
@@ -570,10 +553,10 @@ def page_admin_tools():
             else:
                 users.loc[users["username"] == me["username"], "password"] = newp
                 save_users_df(users)
-                st.success("Password changed. Log out and log in again.")
+                st.success("Password changed. Please log out and log in again.")
                 st.rerun()
 
-# ---------- App layout / routing (tabs) ----------
+# ---------- App startup ----------
 st.set_page_config(APP_TITLE, layout="wide")
 init_files_and_starter()
 
@@ -589,59 +572,52 @@ if not st.session_state.user:
     page_login()
     st.stop()
 
-# build tab list based on role
+# Build tabs and render inside each tab context (correct Streamlit pattern)
 if st.session_state.user["role"].lower() == "admin":
-    tabs = ["Dashboard","Kids","Attendance","Programs","Profiles","Import","Export","Admin Tools","Account","Logout"]
+    tabs_list = ["Dashboard","Kids","Attendance","Programs","Profiles","Import","Export","Admin Tools","Account","Logout"]
 else:
-    tabs = ["Kids","Attendance","Profiles","Account","Logout"]
+    tabs_list = ["Kids","Attendance","Profiles","Account","Logout"]
 
-tabs_ui = st.tabs(tabs)
-# map to functions by index
-tab_idx = {name: idx for idx, name in enumerate(tabs)}
+tabs_objs = st.tabs(tabs_list)
 
-# route
-selected_tab = None
-for name, idx in tab_idx.items():
-    if tabs_ui[idx].selected:
-        selected_tab = name
-        break
-
-# call pages
-if selected_tab == "Dashboard":
-    page_dashboard()
-elif selected_tab == "Kids":
-    page_kids()
-elif selected_tab == "Attendance":
-    page_attendance()
-elif selected_tab == "Programs":
-    page_programs()
-elif selected_tab == "Profiles":
-    page_profiles()
-elif selected_tab == "Import":
-    page_kids()  # import is within kids page
-elif selected_tab == "Export":
-    page_export()
-elif selected_tab == "Admin Tools":
-    page_admin_tools()
-elif selected_tab == "Account":
-    st.header("Account")
-    st.write(f"Signed in: {st.session_state.user['full_name']} ({st.session_state.user['role']})")
-    users = load_csv(USERS_CSV)
-    me = users[users["username"] == st.session_state.user["username"]].iloc[0]
-    with st.form("change_pass_self"):
-        old = st.text_input("Old password", type="password")
-        newp = st.text_input("New password", type="password")
-        if st.form_submit_button("Change password"):
-            if not check_password(old, me["password"]):
-                st.error("Old password incorrect.")
-            else:
-                users.loc[users["username"] == me["username"], "password"] = newp
-                save_users_df(users)
-                st.success("Password changed. Please log out and log in again.")
+for name, tab in zip(tabs_list, tabs_objs):
+    with tab:
+        if name == "Dashboard":
+            page_dashboard()
+        elif name == "Kids":
+            page_kids()
+        elif name == "Attendance":
+            page_attendance()
+        elif name == "Programs":
+            page_programs()
+        elif name == "Profiles":
+            page_profiles()
+        elif name == "Import":
+            # import area lives in kids page - call same function
+            page_kids()
+        elif name == "Export":
+            page_export()
+        elif name == "Admin Tools":
+            page_admin_tools()
+        elif name == "Account":
+            st.header("Account")
+            st.write(f"Signed in: {st.session_state.user['full_name']} ({st.session_state.user['role']})")
+            users = load_csv(USERS_CSV)
+            me = users[users["username"] == st.session_state.user["username"]].iloc[0]
+            with st.form("change_pass_self"):
+                old = st.text_input("Old password", type="password")
+                newp = st.text_input("New password", type="password")
+                if st.form_submit_button("Change password"):
+                    if not check_password(old, me["password"]):
+                        st.error("Old password incorrect.")
+                    else:
+                        users.loc[users["username"] == me["username"], "password"] = newp
+                        save_users_df(users)
+                        st.success("Password changed. Please log out and log in again.")
+                        st.rerun()
+        elif name == "Logout":
+            st.write("Click to log out")
+            if st.button("Log out"):
+                st.session_state.user = None
+                st.session_state.selected_kid = None
                 st.rerun()
-elif selected_tab == "Logout":
-    st.write("Press below to log out.")
-    if st.button("Log out"):
-        st.session_state.user = None
-        st.session_state.selected_kid = None
-        st.rerun()
