@@ -24,7 +24,7 @@ if not st.session_state.logged_in:
             st.session_state.role = role_choice
             st.session_state.username = username
             st.success(f"Welcome {username} ({role_choice})")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("Invalid credentials or role mismatch.")
 
@@ -38,4 +38,4 @@ else:
 
     if st.sidebar.button("Logout", key="logout_btn"):
         st.session_state.clear()
-        st.experimental_rerun()
+        st.rerun()
