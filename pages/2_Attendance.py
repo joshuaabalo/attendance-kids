@@ -1,63 +1,32 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-import os
+from utils.data import load_kids_from_csv, load_attendance_csv, save_attendance_csv
 
-KIDS_CSV = "data/kids.csv"
-ATTENDANCE_CSV = "data/attendance.csv"
-
-# Load kids data
-def load_kids():
-    if os.path.exists(KIDS_CSV):
-        return pd.read_csv(KIDS_CSV)
-    return pd.DataFrame(columns=["Name", "Program", "Age", "Gender"])
-
-# Save attendance
-def save_attendance(att_df):
-    if os.path.exists(ATTENDANCE_CSV):
-        existing = pd.read_csv(ATTENDANCE_CSV)
-        combined = pd.concat([existing, att_df], ignore_index=True)
-    else:
-        combined = att_df
-    combined.to_csv(ATTENDANCE_CSV, index=False)
-
-# Page for daily attendance
 def run():
-    st.title("📋 Daily Attendance")
+    st.title("Daily Attendance")
 
-    if "user" not in st.session_state:
-        st.warning("Please log in first.")
-        st.stop()
+    kids = load_kids_from_csv()
 
-    user = st.session_state.user
-    kids_df = load_kids()
+    # Filter for leader
+    if st.session_state.role == "Leader":
+        kids = kids[kids["program"] == st.session_state.username]
 
-    # Filter kids if leader
-    if user["role"] == "leader":
-        kids_df = kids_df[kids_df["Program"] == user["program"]]
-
-    if kids_df.empty:
-        st.info("No kids found for your program.")
-        st.stop()
+    attendance = load_attendance_csv()
 
     today = date.today().strftime("%Y-%m-%d")
-    st.subheader(f"Mark Attendance for {today}")
+    st.subheader(f"Mark Attendance - {today}")
 
-    attendance_data = []
-    for _, row in kids_df.iterrows():
-        present = st.checkbox(f"{row['Name']} ({row['Program']})", value=True)
-        attendance_data.append({
-            "Date": today,
-            "Kid": row["Name"],
-            "Program": row["Program"],
-            "Present": present
-        })
+    attendance_today = {}
+    for _, row in kids.iterrows():
+        present = st.checkbox(f"{row['name']} (Program: {row['program']})", key=f"att_{row['name']}")
+        attendance_today[row['name']] = "Present" if present else "Absent"
 
     if st.button("Save Attendance"):
-        att_df = pd.DataFrame(attendance_data)
-        save_attendance(att_df)
-        st.success("Attendance saved successfully!")
-
-if __name__ == "__main__":
-    run()
-
+        for kid_name, status in attendance_today.items():
+            attendance = pd.concat([
+                attendance,
+                pd.DataFrame([{"date": today, "name": kid_name, "status": status}])
+            ], ignore_index=True)
+        save_attendance_csv(attendance)
+        st.success("Attendance saved successfully.")
