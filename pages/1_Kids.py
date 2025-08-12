@@ -1,30 +1,42 @@
 import streamlit as st
 import pandas as pd
-from utils.data import load_kids_from_csv, save_kids_to_csv
+import os
 
-def run():
-    st.title("Kids Management")
+KIDS_CSV = "data/kids.csv"
 
-    kids = load_kids_from_csv()
+def load_kids():
+    if not os.path.exists(KIDS_CSV) or os.stat(KIDS_CSV).st_size == 0:
+        df = pd.DataFrame(columns=["name", "age", "program"])
+        df.to_csv(KIDS_CSV, index=False)
+        return df
+    return pd.read_csv(KIDS_CSV)
 
-    # If Leader, filter kids to only those in their program
-    if st.session_state.role == "Leader":
-        kids = kids[kids["program"] == st.session_state.username]
+def save_kids(df):
+    df.to_csv(KIDS_CSV, index=False)
 
-    st.dataframe(kids)
+st.title("Kids Management")
 
-    with st.form("add_kid_form"):
-        st.subheader("Add New Kid")
-        name = st.text_input("Name")
-        age = st.number_input("Age", min_value=0, max_value=18)
-        program = st.text_input("Program")
+# Load kids data
+kids_df = load_kids()
 
-        if st.form_submit_button("Add Kid"):
-            if name and program:
-                new_row = {"name": name, "age": age, "program": program}
-                kids = pd.concat([kids, pd.DataFrame([new_row])], ignore_index=True)
-                save_kids_to_csv(kids)
-                st.success(f"Kid {name} added successfully.")
-                st.rerun()
-            else:
-                st.error("Please fill all required fields.")
+# Add kid form
+with st.form("add_kid_form"):
+    name = st.text_input("Child's Name")
+    age = st.number_input("Age", min_value=1, max_value=18)
+    program = st.text_input("Program")
+    submitted = st.form_submit_button("Add Kid")
+    
+    if submitted:
+        if name.strip() and program.strip():
+            new_row = pd.DataFrame([[name.strip(), age, program.strip()]],
+                                   columns=["name", "age", "program"])
+            kids_df = pd.concat([kids_df, new_row], ignore_index=True)
+            save_kids(kids_df)
+            st.success(f"{name} added successfully!")
+            st.experimental_rerun()
+        else:
+            st.error("Please fill in all fields.")
+
+# Show kids list
+st.subheader("All Kids")
+st.dataframe(kids_df)
