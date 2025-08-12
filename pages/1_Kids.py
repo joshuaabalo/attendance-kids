@@ -63,5 +63,5 @@ def page_kids(user):
                 kids_df = kids_df.append(new_row, ignore_index=True)
                 save_kids(kids_df)
                 st.success("Kid added successfully!")
-                st.experimental_rerun()
+                st.rerun()
 
