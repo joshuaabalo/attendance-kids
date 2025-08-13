@@ -26,10 +26,10 @@ else:
     menu = ["Kids", "Attendance", "Reports", "Admin", "Logout"] if user["role"].lower() == "admin" else ["Kids", "Attendance", "Reports", "Logout"]
     choice = st.sidebar.radio("Navigation", menu, key="main_nav")
     pages = {
-        "Kids": "pages.1_Kids",
-        "Attendance": "pages.2_Attendance",
-        "Reports": "pages.3_Reports",
-        "Admin": "pages.4_Admin"
+        "Kids": "app_pages.1_Kids",
+        "Attendance": "app_pages.2_Attendance",
+        "Reports": "app_pages.3_Reports",
+        "Admin": "app_pages.4_Admin"
     }
     if choice == "Logout":
         if st.sidebar.button("Log out", key="logout_main"):
