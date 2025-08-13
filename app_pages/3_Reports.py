@@ -25,9 +25,9 @@ def run():
         st.error("Please log in to access reports.")
         return
 
-    user = st.session_state.user
-    role = user["Role"].lower()
-    program = user.get("Program", None)
+user = st.session_state.user
+role = user.get("role", "").lower()
+program = user.get("program", None)
 
     # Load data
     kids_df = load_kids()
