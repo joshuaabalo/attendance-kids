@@ -1,6 +1,6 @@
 import streamlit as st
 import importlib
-from utils.auth import login_user, load_users
+from utils.auth import login_user
 
 st.set_page_config(page_title="Attendance Kids", layout="wide")
 
@@ -43,9 +43,8 @@ else:
     }
 
     if choice == "Logout":
-        if st.sidebar.button("Log out", key="logout_main"):
-            st.session_state.user = None
-            st.experimental_rerun()
+        st.session_state.user = None
+        st.experimental_rerun()
     else:
         module = pages.get(choice)
         try:
