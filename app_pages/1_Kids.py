@@ -10,22 +10,23 @@ def run():
 
     # Add New Kid Form
     st.subheader("Add a New Kid")
-    with st.form("add_kid_form"):
-        kid_name = st.text_input("Kid's Name")
-        age = st.number_input("Age", min_value=1, max_value=18)
-        program = st.text_input("Program Name")
-        submitted = st.form_submit_button("Add Kid")
+with st.form("add_kid_form"):
+    kid_name = st.text_input("Kid's Name")
+    age = st.number_input("Age", min_value=1, max_value=18)
+    program = st.selectbox("Program", ["Sunday School", "Teens", "Youth"])
 
-if submitted:
-    if kid_name.strip() != "" and program:
-        new_kid = {"Name": kid_name.strip(), "Age": age, "Program": program, "Leader": username}
-        new_kid_df = pd.DataFrame([new_kid])
-        kids = pd.concat([kids, new_kid_df], ignore_index=True)
-        save_kids(kids)
-        st.success(f"{kid_name} added successfully!")
-        st.experimental_rerun()
-    else:
-        st.error("Please provide both name and program.")
+    submitted = st.form_submit_button("Add Kid")
+    if submitted:
+        if kid_name.strip() != "" and program:
+            new_kid = {"Name": kid_name.strip(), "Age": age, "Program": program, "Leader": username}
+            new_kid_df = pd.DataFrame([new_kid])
+            kids = pd.concat([kids, new_kid_df], ignore_index=True)
+            save_kids(kids)
+            st.success(f"{kid_name} added successfully!")
+            st.experimental_rerun()
+        else:
+            st.error("Please provide both name and program.")
+
 
 
     # Show Kids List
