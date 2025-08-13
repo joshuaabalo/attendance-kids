@@ -20,20 +20,20 @@ def load_attendance():
 def run():
     st.title("Reports")
 
-    # Ensure user is logged in
+    # Check user session
     if "user" not in st.session_state:
         st.error("Please log in to access reports.")
         return
 
-user = st.session_state.user
-role = user.get("role", "").lower()
-program = user.get("program", None)
+    user = st.session_state.user
+    role = user.get("role", "").lower()
+    program = user.get("program", None)
 
     # Load data
     kids_df = load_kids()
     attendance_df = load_attendance()
 
-    # Filter kids for leaders
+    # Filter kids based on role
     if role == "leader" and program:
         kids_df = kids_df[kids_df["Program"] == program]
 
@@ -41,14 +41,13 @@ program = user.get("program", None)
         st.info("No kids found for your program.")
         return
 
-    # Show list of kids
     st.subheader("Kids List")
-    selected_kid = st.selectbox("Select a kid to view report:", kids_df["Name"].tolist())
+    selected_kid = st.selectbox("Select a kid to view their report:", kids_df["Name"].tolist())
 
     if selected_kid:
-        st.write(f"### Report for {selected_kid}")
+        st.write(f"### Attendance Report for {selected_kid}")
 
-        # Get attendance for the selected kid
+        # Filter attendance for the selected kid
         kid_attendance = attendance_df[attendance_df["Name"] == selected_kid]
 
         if kid_attendance.empty:
@@ -57,16 +56,17 @@ program = user.get("program", None)
 
         # Calculate attendance percentage
         total_classes = len(kid_attendance)
-        present_count = len(kid_attendance[kid_attendance["Status"] == "Present"])
+        present_count = len(kid_attendance[kid_attendance["Status"].str.lower() == "present"])
         attendance_percentage = (present_count / total_classes) * 100
 
-        st.write(f"**Total Classes:** {total_classes}")
+        # Show summary
+        st.write(f"**Total Sessions:** {total_classes}")
         st.write(f"**Present:** {present_count}")
         st.write(f"**Attendance Percentage:** {attendance_percentage:.2f}%")
 
-        # Show progress bar
+        # Progress bar
         st.progress(int(attendance_percentage))
 
-        # Show detailed history
+        # Show attendance history
         st.subheader("Attendance History")
         st.dataframe(kid_attendance.sort_values(by="Date", ascending=False))
