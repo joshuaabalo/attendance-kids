@@ -18,8 +18,8 @@ def run():
 
     if submitted:
         if kid_name and program:
-            new_kid = {"name": kid_name, "age": age, "program": program}
-            kids = kids.append(new_kid, ignore_index=True)
+            new_kid_df = pd.DataFrame([new_kid])
+        kids_df = pd.concat([kids_df, new_kid_df], ignore_index=True)
             save_kids(kids)
             st.success(f"{kid_name} added successfully!")
         else:
