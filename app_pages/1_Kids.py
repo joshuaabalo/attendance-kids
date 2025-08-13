@@ -17,13 +17,14 @@ def run():
         submitted = st.form_submit_button("Add Kid")
 
     if submitted:
-        if kid_name and program:
-            new_kid_df = pd.DataFrame([new_kid])
-        kids_df = pd.concat([kids_df, new_kid_df], ignore_index=True)
-            save_kids(kids)
-            st.success(f"{kid_name} added successfully!")
+        if name.strip() == "":
+            st.error("Name cannot be empty.")
         else:
-            st.error("Please provide both name and program.")
+            new_kid = {"Name": name.strip(), "Age": age, "Program": program, "Leader": username}
+            kids_df = kids_df.append(new_kid, ignore_index=True)  # <-- This line
+            save_kids(kids_df)
+            st.success(f"Added {name} to {program}.")
+            st.experimental_rerun()
 
     # Show Kids List
     st.subheader("Kids List")
