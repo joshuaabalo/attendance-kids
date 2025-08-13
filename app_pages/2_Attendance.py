@@ -3,6 +3,7 @@ import pandas as pd
 import os
 
 KIDS_FILE = "kids.csv"
+ATTENDANCE_FILE = "attendance.csv"  # separate file to store attendance records
 
 # Load kids data
 def load_kids():
@@ -10,51 +11,56 @@ def load_kids():
         return pd.read_csv(KIDS_FILE)
     return pd.DataFrame(columns=["Name", "Age", "Program", "Leader"])
 
-# Save kids data
-def save_kids(df):
-    df.to_csv(KIDS_FILE, index=False)
+# Load attendance data
+def load_attendance():
+    if os.path.exists(ATTENDANCE_FILE):
+        return pd.read_csv(ATTENDANCE_FILE)
+    return pd.DataFrame(columns=["Date", "Kid", "Present", "MarkedBy"])
 
-def run():
-    st.title("Kids Attendance / Management")
+# Save attendance data
+def save_attendance(df):
+    df.to_csv(ATTENDANCE_FILE, index=False)
 
-    # Load existing kids
+def attendance_page():
+    st.title("Mark Attendance")
+
     kids = load_kids()
+    attendance = load_attendance()
+
+    if kids.empty:
+        st.info("No kids available. Please add kids first on the Kids page.")
+        return
 
     # Get current user safely
-    if "user" in st.session_state:
-        user = st.session_state.user
-        username = user.get("username", "unknown")
-        role = user.get("role", "leader").lower()
-    else:
-        username = "unknown"
-        role = "leader"
+    username = st.session_state.user.get("username", "unknown") if "user" in st.session_state else "unknown"
+    role = st.session_state.user.get("role", "leader").lower() if "user" in st.session_state else "leader"
 
-    # Filter for leaders
+    # Leaders only see their own kids
     if role == "leader":
         kids = kids[kids["Leader"] == username]
 
-    # Display kids list
-    st.subheader("Current Kids")
-    if kids.empty:
-        st.info("No kids found.")
-    else:
-        st.dataframe(kids)
+    st.subheader("Kids List")
+    st.dataframe(kids[["Name", "Program", "Age"]])
 
-    # Add new kid form
-    st.subheader("Add a New Kid")
-    with st.form("add_kid_form"):
-        kid_name = st.text_input("Kid's Name")
-        age = st.number_input("Age", min_value=1, max_value=18)
-        program = st.selectbox("Program", ["Sunday School", "Teens", "Youth"])
+    st.subheader("Mark Attendance for Today")
+    with st.form("attendance_form"):
+        today = pd.Timestamp.now().strftime("%Y-%m-%d")
+        # Multiple select for kids present today
+        present_kids = st.multiselect("Select kids who are present", kids["Name"].tolist())
+        submitted = st.form_submit_button("Submit Attendance")
 
-        submitted = st.form_submit_button("Add Kid")
         if submitted:
-            if kid_name.strip() != "" and program:
-                new_kid = {"Name": kid_name.strip(), "Age": age, "Program": program, "Leader": username}
-                new_kid_df = pd.DataFrame([new_kid])
-                kids = pd.concat([kids, new_kid_df], ignore_index=True)
-                save_kids(kids)
-                st.success(f"{kid_name} added successfully!")
-                st.experimental_rerun()
+            if not present_kids:
+                st.warning("No kids selected as present.")
             else:
-                st.error("Please provide both name and program.")
+                for kid in kids["Name"]:
+                    record = {
+                        "Date": today,
+                        "Kid": kid,
+                        "Present": kid in present_kids,
+                        "MarkedBy": username
+                    }
+                    attendance = pd.concat([attendance, pd.DataFrame([record])], ignore_index=True)
+                save_attendance(attendance)
+                st.success("Attendance recorded successfully!")
+                st.experimental_rerun()
