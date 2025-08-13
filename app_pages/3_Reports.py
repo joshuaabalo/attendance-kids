@@ -11,11 +11,14 @@ def load_kids():
         return pd.read_csv(KIDS_FILE)
     return pd.DataFrame(columns=["Name", "Age", "Program", "Leader"])
 
-# Load attendance
+# Load attendance and normalize column names
 def load_attendance():
     if os.path.exists(ATTENDANCE_FILE):
-        return pd.read_csv(ATTENDANCE_FILE)
+        df = pd.read_csv(ATTENDANCE_FILE)
+        df.columns = [c.strip().capitalize() for c in df.columns]  # Normalize headers
+        return df
     return pd.DataFrame(columns=["Date", "Name", "Program", "Status"])
+
 
 def run():
     st.title("Reports")
