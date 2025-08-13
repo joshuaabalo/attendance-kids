@@ -23,7 +23,7 @@ def run():
         save_kids(kids)
         st.success(f"{kid_name} added successfully!")
         else:
-            st.error("Please provide both name and program.")
+        st.error("Please provide both name and program.")
 
     # Show Kids List
     st.subheader("Kids List")
