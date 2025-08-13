@@ -18,10 +18,10 @@ def run():
 
     if submitted:
         if kid_name and program:
-            new_kid = {"name": kid_name, "age": age, "program": program}
-            kids = pd.DataFrame(new_kid, ignore_index=True)
-            save_kids(kids)
-            st.success(f"{kid_name} added successfully!")
+        new_kid_df = pd.DataFrame([new_kid])  
+        kids = pd.concat([kids, new_kid_df], ignore_index=True)
+        save_kids(kids)
+        st.success(f"{kid_name} added successfully!")
         else:
             st.error("Please provide both name and program.")
 
