@@ -1,19 +1,3 @@
-import streamlit as st
-import pandas as pd
-import os
-
-KIDS_FILE = "kids.csv"
-
-# Load kids data
-def load_kids():
-    if os.path.exists(KIDS_FILE):
-        return pd.read_csv(KIDS_FILE)
-    return pd.DataFrame(columns=["Name", "Age", "Program", "Leader"])
-
-# Save kids data
-def save_kids(df):
-    df.to_csv(KIDS_FILE, index=False)
-
 def run():
     st.title("Kids Management")
 
@@ -48,7 +32,10 @@ def run():
                 st.error("Name cannot be empty.")
             else:
                 new_kid = {"Name": name.strip(), "Age": age, "Program": program, "Leader": username}
-                kids_df = kids_df.append(new_kid, ignore_index=True)
+                # Convert dict to DataFrame
+                new_kid_df = pd.DataFrame([new_kid])
+                # Concatenate with existing DataFrame
+                kids_df = pd.concat([kids_df, new_kid_df], ignore_index=True)
                 save_kids(kids_df)
                 st.success(f"Added {name} to {program}.")
                 st.experimental_rerun()
