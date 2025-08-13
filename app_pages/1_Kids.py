@@ -16,14 +16,17 @@ def run():
         program = st.text_input("Program Name")
         submitted = st.form_submit_button("Add Kid")
 
-    if submitted:
-        if kid_name and program:
-        new_kid_df = pd.DataFrame([new_kid])  
+if submitted:
+    if kid_name.strip() != "" and program:
+        new_kid = {"Name": kid_name.strip(), "Age": age, "Program": program, "Leader": username}
+        new_kid_df = pd.DataFrame([new_kid])
         kids = pd.concat([kids, new_kid_df], ignore_index=True)
         save_kids(kids)
         st.success(f"{kid_name} added successfully!")
-        else:
+        st.experimental_rerun()
+    else:
         st.error("Please provide both name and program.")
+
 
     # Show Kids List
     st.subheader("Kids List")
