@@ -1,60 +1,60 @@
 import streamlit as st
 import pandas as pd
-from datetime import date, datetime
-from utils.data import load_kids, load_attendance, save_attendance
+import os
+
+KIDS_FILE = "kids.csv"
+
+# Load kids data
+def load_kids():
+    if os.path.exists(KIDS_FILE):
+        return pd.read_csv(KIDS_FILE)
+    return pd.DataFrame(columns=["Name", "Age", "Program", "Leader"])
+
+# Save kids data
+def save_kids(df):
+    df.to_csv(KIDS_FILE, index=False)
 
 def run():
-    st.title("Daily Attendance")
+    st.title("Kids Attendance / Management")
 
-    if "user" not in st.session_state or not st.session_state.user:
-        st.warning("Please log in first.")
-        st.stop()
-
-    user = st.session_state.user
+    # Load existing kids
     kids = load_kids()
 
-    # Scope for leader
-    if user["role"].lower() == "leader":
-        allowed = user.get("programs", [])
-        kids = kids[kids["program"].isin(allowed)]
+    # Get current user safely
+    if "user" in st.session_state:
+        user = st.session_state.user
+        username = user.get("username", "unknown")
+        role = user.get("role", "leader").lower()
+    else:
+        username = "unknown"
+        role = "leader"
 
+    # Filter for leaders
+    if role == "leader":
+        kids = kids[kids["Leader"] == username]
+
+    # Display kids list
+    st.subheader("Current Kids")
     if kids.empty:
-        st.info("No kids in scope.")
-        st.stop()
+        st.info("No kids found.")
+    else:
+        st.dataframe(kids)
 
-    today = date.today().isoformat()
-    st.subheader(f"Mark attendance for {today}")
+    # Add new kid form
+    st.subheader("Add a New Kid")
+    with st.form("add_kid_form"):
+        kid_name = st.text_input("Kid's Name")
+        age = st.number_input("Age", min_value=1, max_value=18)
+        program = st.selectbox("Program", ["Sunday School", "Teens", "Youth"])
 
-    att = load_attendance()
-    existing = att[att["date"] == today]
-    present_defaults = {row["kid_id"]:(row["present"]=="1") for _,row in existing.iterrows()}
-    notes_defaults = {row["kid_id"]: row.get("note","") for _,row in existing.iterrows()}
-
-    checked = {}
-    notes = {}
-    for _, k in kids.sort_values("name").iterrows():
-        cols = st.columns([1,4,3])
-        with cols[0]:
-            val = st.checkbox("", value=present_defaults.get(k["id"], False), key=f"chk_{k['id']}")
-        with cols[1]:
-            st.markdown(f"**{k['name']}**")
-            st.write(f"Program: {k['program']}")
-        with cols[2]:
-            note = st.text_input("Note", value=notes_defaults.get(k["id"], ""), key=f"note_{k['id']}")
-        checked[k["id"]] = val
-        notes[k["id"]] = note
-
-    if st.button("Save attendance", key="save_attendance_btn"):
-        new_att = att[att["date"] != today]
-        now = datetime.now().isoformat(timespec="seconds")
-        for kid_id, is_present in checked.items():
-            kid_prog = kids[kids["id"] == kid_id]["program"].values[0] if not kids.empty else ""
-            row = {"date": today, "kid_id": kid_id, "present": "1" if is_present else "0", "note": notes.get(kid_id,""), "program": kid_prog, "marked_by": user["username"], "timestamp": now}
-            new_att = pd.concat([new_att, pd.DataFrame([row])], ignore_index=True)
-        save_attendance(new_att)
-        st.success("Attendance saved.")
-        st.experimental_rerun()
-
-if __name__ == "__main__":
-    run()
-
+        submitted = st.form_submit_button("Add Kid")
+        if submitted:
+            if kid_name.strip() != "" and program:
+                new_kid = {"Name": kid_name.strip(), "Age": age, "Program": program, "Leader": username}
+                new_kid_df = pd.DataFrame([new_kid])
+                kids = pd.concat([kids, new_kid_df], ignore_index=True)
+                save_kids(kids)
+                st.success(f"{kid_name} added successfully!")
+                st.experimental_rerun()
+            else:
+                st.error("Please provide both name and program.")
